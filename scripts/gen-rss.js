@@ -3,6 +3,8 @@ const path = require('path')
 const RSS = require('rss')
 const matter = require('gray-matter')
 
+const POSTS_DIR = path.join(__dirname, '..', 'app', 'posts')
+
 async function generate() {
   const feed = new RSS({
     title: 'Your Name',
@@ -10,26 +12,26 @@ async function generate() {
     feed_url: 'https://yoursite.com/feed.xml'
   })
 
-  const posts = await fs.readdir(path.join(__dirname, '..', 'pages', 'posts'))
+  const entries = await fs.readdir(POSTS_DIR, { withFileTypes: true })
 
   await Promise.all(
-    posts.map(async (name) => {
-      if (name.startsWith('index.')) return
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async ({ name }) => {
+        const file = path.join(POSTS_DIR, name, 'page.mdx')
+        const content = await fs.readFile(file).catch(() => null)
+        if (!content) return
 
-      const content = await fs.readFile(
-        path.join(__dirname, '..', 'pages', 'posts', name)
-      )
-      const frontmatter = matter(content)
-
-      feed.item({
-        title: frontmatter.data.title,
-        url: '/posts/' + name.replace(/\.mdx?/, ''),
-        date: frontmatter.data.date,
-        description: frontmatter.data.description,
-        categories: frontmatter.data.tag.split(', '),
-        author: frontmatter.data.author
+        const { data } = matter(content)
+        feed.item({
+          title: data.title,
+          url: '/posts/' + name,
+          date: data.date,
+          description: data.description,
+          categories: data.tags ?? [],
+          author: data.author
+        })
       })
-    })
   )
 
   await fs.writeFile('./public/feed.xml', feed.xml({ indent: true }))
